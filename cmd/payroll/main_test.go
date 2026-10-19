@@ -1,4 +1,4 @@
-package main
+package payroll
 
 import (
 	"bytes"
@@ -262,7 +262,7 @@ func TestRunMain(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			stdout, err := captureStdout(t, func() error { return runMain(context.Background()) })
+			stdout, err := captureStdout(t, func() error { return runMain(context.Background(), os.Stdout) })
 			if err != nil {
 				t.Fatalf("runMain: %v", err)
 			}
@@ -282,7 +282,7 @@ func TestRunMain(t *testing.T) {
 
 func TestRunMainMissingInput(t *testing.T) {
 	dir := chdirTemp(t)
-	err := runMain(context.Background())
+	err := runMain(context.Background(), io.Discard)
 	if err == nil {
 		t.Fatal("expected error for missing input")
 	}
