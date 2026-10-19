@@ -1,4 +1,4 @@
-// Command payroll is the Go port of the COBOL PAYROLL batch program.
+// Package payroll is the Go port of the COBOL PAYROLL batch program.
 //
 // It reads fixed-width employee records from employees.txt, computes each
 // employee's pay (time-and-a-half for hours over 40), writes one "ID PAY"
@@ -6,7 +6,7 @@
 //
 // All arithmetic is done in exact int64 cents to reproduce COBOL fixed-point
 // semantics (PIC 9(n)V99, COMPUTE ROUNDED, high-order truncation).
-package main
+package payroll
 
 import (
 	"bufio"
@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"strings"
 )
 
@@ -140,7 +139,7 @@ func Run(ctx context.Context, in io.Reader, out io.Writer) (int64, error) {
 	return total, nil
 }
 
-func runMain(ctx context.Context) error {
+func runMain(ctx context.Context, stdout io.Writer) error {
 	// Open input before creating output, as OPEN INPUT ... OUTPUT does.
 	in, err := os.Open(inputPath)
 	if err != nil {
@@ -161,16 +160,17 @@ func runMain(ctx context.Context) error {
 	if err := out.Close(); err != nil {
 		return fmt.Errorf("close %s: %w", outputPath, err)
 	}
-	fmt.Println("TOTAL " + FormatTotal(total))
+	fmt.Fprintln(stdout, "TOTAL "+FormatTotal(total))
 	return nil
 }
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	err := runMain(ctx)
-	stop()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "payroll:", err)
-		os.Exit(1)
+// Main runs the payroll program and returns its exit code.
+func Main(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	_ = args
+	_ = stdin
+	if err := runMain(ctx, stdout); err != nil {
+		fmt.Fprintln(stderr, "payroll:", err)
+		return 1
 	}
+	return 0
 }
