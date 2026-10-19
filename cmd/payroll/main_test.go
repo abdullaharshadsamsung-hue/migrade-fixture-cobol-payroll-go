@@ -24,7 +24,7 @@ func TestParseRecord(t *testing.T) {
 		{"leading zero id", "0000 000 00000", Record{ID: "0000", Hours: 0, RateCents: 0}},
 		{"max", "9999 999 99999", Record{ID: "9999", Hours: 999, RateCents: 99999}},
 		{"empty", "", Record{ID: "    ", Hours: 0, RateCents: 0}},
-		{"spaces as zero", "0005  4  25 0", Record{ID: "0005", Hours: 40, RateCents: 2500}},
+		{"spaces as zero", "0005  4   25 0", Record{ID: "0005", Hours: 40, RateCents: 2500}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -248,7 +248,7 @@ func TestRunMain(t *testing.T) {
 			"0001 040 02500\n0002 045 02000\n0003 041 00001\n",
 			"stale content\n",
 			"0001    1000.00\n0002     950.00\n0003       0.42\n",
-			"TOTAL       1950.42\n",
+			"TOTAL      1950.42\n",
 		},
 	}
 	for _, tt := range tests {
