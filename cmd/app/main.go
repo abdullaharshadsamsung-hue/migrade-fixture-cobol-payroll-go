@@ -5,14 +5,15 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"syscall"
 
-	"migrated-app/cmd/payroll"
+	"migrated-app/internal/payroll"
 )
 
 // run executes the program with its command-line arguments and returns
 // its exit code.
 func run(args []string) int {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	out := bufio.NewWriter(os.Stdout)
 	code := payroll.Main(ctx, args, os.Stdin, out, os.Stderr)
