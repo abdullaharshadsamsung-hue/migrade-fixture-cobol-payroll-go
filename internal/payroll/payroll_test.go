@@ -242,7 +242,7 @@ func TestRunMain(t *testing.T) {
 		wantFile   string
 		wantStdout string
 	}{
-		{"empty", "", "", "", "TOTAL          0.00\n"},
+		{"empty", "", "", "", "TOTAL         0.00\n"},
 		{
 			"multiple overwrites",
 			"0001 040 02500\n0002 045 02000\n0003 041 00001\n",
