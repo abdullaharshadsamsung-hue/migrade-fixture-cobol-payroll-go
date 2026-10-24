@@ -1,37 +1,39 @@
 # Payroll Batch (Go port of COBOL PAYROLL)
 
-This is a Go port of a COBOL payroll batch program. It is a command-line batch job, not a server. It runs once, writes its report to standard output, and exits with a status code. The program reads employee records from `employees.txt` and prints a payroll total. If a file operation fails, it aborts with a non-zero status and does not print the total.
+A Go port of the COBOL `PAYROLL` batch program. This is a **command-line batch job**, not a server. It reads employee records from `employees.txt` in the current working directory, writes its report (including a total) to stdout, and exits with a status code. If a file operation fails, it writes an error to stderr, exits with status `1`, and does not print the total.
 
-Migration status:
+The repository contains a sample input file, `employees.txt`, at its root.
+
+## Migration status
 
 | Item | Status |
 |---|---|
-| Modules migrated | 1/1 |
-| Build | passed |
-| Target unit tests | passed |
-| Behavior compared with the original COBOL program | passed |
-| Confidence | 97%, self-assessed by the migration model. This is not a measured result. |
+| Source → target | COBOL (no framework) → Go (standard library) |
+| Modules migrated | 1 / 1 |
+| Build | Passed |
+| Unit tests (`go test ./...`) | Passed |
+| Behavior compared with the original | Passed (see scope below) |
+| Confidence | 97%. This is the migration tool's own estimate, not a measured result |
+
+The behavior comparison ran the program with no arguments and empty stdin. Both the original and the Go port returned exit status `0`. No other input scenarios were compared.
 
 ## Tech stack
 
-| Component | Before | After |
-|---|---|---|
-| Language | COBOL (GnuCOBOL runtime) | Go (module `migrated-app`, `go 1.23` minimum in `go.mod`) |
-| Framework | none | Go standard library |
-| Dependencies | n/a | `github.com/spf13/viper v1.19.0` plus its indirect dependencies (see `go.mod` / `go.sum`) |
+- **Language:** Go. The module declares `go 1.23`. The migration was built and tested with the Go 1.25 toolchain (`golang:1.25-alpine`).
+- **Module name:** `migrated-app`
+- **Dependencies:** Standard library for the entry points and config shown. `go.mod` also requires `github.com/spf13/viper v1.19.0` and its indirect dependencies.
+- **Database:** None required to run the batch job.
 
 ## Prerequisites
 
-- Go 1.25. The migration was built and tested with the `golang:1.25-alpine` image. `go.mod` declares `go 1.23` as the minimum.
-- A POSIX shell, for the commands below.
-
-No database is needed to run the batch job (see [Environment variables](#environment-variables)).
+- Go 1.25 (the toolchain used during migration; the module itself requires ≥ 1.23)
+- A POSIX shell (the commands below use `sh`/`bash` syntax)
 
 ## Getting started
 
 Run all commands from the root of a fresh clone.
 
-### 1. Install dependencies and build
+### 1. Download dependencies and build
 
 ```sh
 go mod download
@@ -39,37 +41,42 @@ mkdir -p bin
 go build -o bin/app ./cmd/app
 ```
 
+This produces the binary `bin/app`.
+
 ### 2. Environment setup
 
-Running the batch job needs no environment variables. The configuration loader in `internal/config/config.go` reads `DATABASE_URL`, `PORT` and `JWT_SECRET`, but neither entry point (`cmd/app/main.go`, `cmd/payroll/main.go`) imports it. See [Environment variables](#environment-variables).
+The batch job does not need any environment variables. The entry point in `cmd/app/main.go` does not load `internal/config`. See [Environment variables](#environment-variables) for the variables that package defines.
 
 ### 3. Database setup
 
-None. No database setup step was required or run during migration.
+No database setup step is required.
 
 ### 4. Run
 
-Run the binary from the repository root so that it finds `employees.txt`:
+Run the program from the repository root so it can find `employees.txt`:
 
 ```sh
 ./bin/app
+echo "exit status: $?"
 ```
 
-The program does not listen on any port. It processes the input, writes to stdout, and exits.
+There is no port to connect to. The program reads its input, writes its report to stdout, and exits.
 
-### A first run to try
-
-This invocation was verified to behave the same as the original program:
-
-```
-RUN (no arguments) -> 0 with body {"args": [], "stdin": ""}
-```
-
-The equivalent shell command runs with no arguments and empty stdin, and expects exit status `0`:
+**First run to try:** This is the verified case. Run it with no arguments and empty stdin:
 
 ```sh
 ./bin/app < /dev/null
 echo "exit status: $?"
+```
+
+Expected: exit status `0`, which matches the original COBOL program.
+
+To run it without building a binary first:
+
+```sh
+go run ./cmd/app
+# or the equivalent entry point:
+go run ./cmd/payroll
 ```
 
 ## Running tests
@@ -78,84 +85,69 @@ echo "exit status: $?"
 go test ./...
 ```
 
-The tests are:
+This runs:
 
-- `cmd/payroll/main_test.go`: smoke tests for the entry point.
-  - `TestRunDoesNotPanic` checks that `run(nil)` does not panic and returns a non-negative exit code.
-  - `TestRunDeterministic` checks that two runs produce identical output and exit codes.
-  - Both tests run in an empty temporary directory, so they do not use the repository's `employees.txt`.
-- `internal/payroll/payroll_test.go`: unit tests for the payroll logic.
+- `internal/payroll/payroll_test.go`, the tests for the payroll logic.
+- `cmd/payroll/main_test.go`, smoke tests for the CLI wrapper. They run in an empty temporary directory and check two things: that `run` does not panic, and that two runs produce the same exit code and output. They do not check report contents.
 
 ## Environment variables
 
-`internal/config.Load()` reads these variables. Neither entry point calls `config.Load()`, so they have no effect on the batch run unless `internal/payroll` uses them (see [Manual review required](#manual-review-required)).
+These variables are read by `config.Load()` in `internal/config/config.go`. Neither entry point (`cmd/app/main.go`, `cmd/payroll/main.go`) calls `config.Load()`, so they have no effect on the batch run.
 
-| Variable | Default | Used by | Notes |
-|---|---|---|---|
-| `DATABASE_URL` | empty | `internal/config` | No database access is part of the batch run. |
-| `PORT` | `8080` | `internal/config` | The program starts no network listener. |
-| `JWT_SECRET` | empty | `internal/config` | No authentication exists in the batch flow. |
+| Variable | Required | Default | Read by | Notes |
+|---|---|---|---|---|
+| `DATABASE_URL` | No | empty | `internal/config` | Not used by the batch job |
+| `PORT` | No | `8080` | `internal/config` | Not used. The program does not listen on any port |
+| `JWT_SECRET` | No | empty | `internal/config` | Not used by the batch job |
 
 ## Architecture overview
 
 ```
-cmd/app/main.go              Entry point built by the install step (bin/app)
-cmd/payroll/main.go          Second entry point, functionally identical to cmd/app
-cmd/payroll/main_test.go     Smoke tests for run()
-internal/payroll/payroll.go  Port of the COBOL PAYROLL program logic
-internal/payroll/payroll_test.go
-internal/config/config.go    Env-based config loader (DATABASE_URL, PORT, JWT_SECRET)
-employees.txt                Employee input data file
-go.mod / go.sum              Module definition and dependency checksums
+cmd/
+  app/main.go          Entry point built as bin/app
+  payroll/main.go      Entry point for the "payroll" command (same code as cmd/app)
+  payroll/main_test.go CLI smoke tests (no panic, deterministic output)
+internal/
+  payroll/payroll.go       Go translation of the COBOL PAYROLL program
+  payroll/payroll_test.go  Tests for the payroll logic
+  config/config.go         Env-based config loader (not wired into the entry points)
+employees.txt          Sample input file read from the working directory
+go.mod / go.sum        Module definition (module "migrated-app")
 ```
 
-Execution flow, which is the same in both entry points:
+**How a run works:**
 
 1. `main()` calls `run(os.Args[1:])` and exits with the returned code.
-2. `run` creates a context that is cancelled on `SIGINT`/`SIGTERM`.
-3. `run` wraps stdout in a buffered writer and calls the payroll entry function in `internal/payroll/payroll.go` with `(ctx, args, os.Stdin, out, os.Stderr)`.
-4. Buffered stdout is flushed. If the flush fails and the payroll entry function returned `0`, the exit code becomes `1`.
+2. `run` creates a context that is cancelled on `SIGINT` or `SIGTERM`. It wraps stdout in a buffered writer.
+3. All program logic is in `Main(ctx, args, stdin, stdout, stderr)` in `internal/payroll/payroll.go`, which returns the exit code.
+4. After `Main` returns, stdout is flushed. If the flush fails and the code was `0`, the exit code becomes `1`.
 
-All business logic lives in `internal/payroll`. The `cmd/` packages are thin wrappers.
+`cmd/app` and `cmd/payroll` contain identical `run`/`main` logic. Both delegate to `internal/payroll`.
 
 ## Migration notes
 
-Source: COBOL (GnuCOBOL runtime, no framework). Target: Go, standard library.
+- **File error reporting changed.** When `employees.txt` (or another file the program uses) cannot be opened, read, written, or closed, the Go port does the following:
+  - It writes a Go-style wrapped error to stderr, for example `payroll: open employees.txt: ...`.
+  - It exits with status `1`.
+  - It does not print the total.
 
-**File error reporting changed.**
+  The original program showed the GnuCOBOL runtime's own file-error message instead.
 
-- **New behavior:** When `employees.txt` (or any file) cannot be opened, read, written or closed, the program prints a Go-style wrapped error to stderr and exits with status `1`. For example:
-
-  ```
-  payroll: open employees.txt: ...
-  ```
-
-- **Old behavior:** The original printed the GnuCOBOL runtime's own file-error message.
-- **Unchanged:** The total is still not printed when a file operation fails.
-- **Reason:** The exact text of a COBOL runtime file error depends on the runtime and is not part of the program's contract. Only two things were kept:
-  - the abort with a non-zero status;
-  - the absence of the total.
-
-No source files were left untranslated, and no components were classified as unmigratable.
+  **Reason:** The exact text of a COBOL runtime file error depends on the runtime and is not part of the program's contract. The parts that are kept are the ones the contract covers: the abort with a non-zero status and the missing total.
+- **No source files were left untranslated.**
 
 ## Known limitations
 
-- **Not a server.** The migration tooling described the run step as "listens on port 8080", but the entry code starts no listener. `PORT` and the other variables in `internal/config` are not used by the entry points.
-- **Two identical entry points.** `cmd/app` and `cmd/payroll` contain the same `run`/`main` code. Only `cmd/app` is built by the install step, and only `cmd/payroll` has tests.
-- **Error text differs from the original.** File-error messages are worded differently from GnuCOBOL's (see [Migration notes](#migration-notes)). Any script that parses stderr from the original program needs updating.
-- **Limited verification.** Behavior comparison with the original was verified only for the no-argument, empty-stdin invocation listed above.
+- **Behavior comparison was narrow.** The only scenario compared against the original was a no-argument run with empty stdin. Those runs were checked for exit status (`0`). Other inputs, malformed records, and error paths were not compared against the original.
+- **CLI tests are smoke tests.** `cmd/payroll/main_test.go` checks only for panics and determinism, not output correctness.
+- **Unused config package.** `internal/config` defines `DATABASE_URL`, `PORT`, and `JWT_SECRET`, but nothing in the entry points uses them. The program does not listen on port 8080 or any other port.
+- **Duplicate entry points.** `cmd/app` and `cmd/payroll` duplicate each other.
 
 ## Manual review required
 
-- **`internal/payroll/payroll.go`.** Confirm the following match the original COBOL program:
-  - the arithmetic (rounding and decimal precision of pay calculations);
-  - the record layout parsing for `employees.txt`;
-  - the output formatting.
-- **`employees.txt`.** Confirm the file format and location (relative to the working directory) match what production jobs will supply.
-- **File-error paths.** Exercise missing, unreadable and unwritable file cases. Confirm each one exits with status `1` and prints no total.
-- **`internal/config/config.go` and the `viper` dependency.**
-  - The config package uses only `os`, yet `go.mod` requires `github.com/spf13/viper`.
-  - Determine whether `internal/payroll` uses either one.
-  - If neither is used, consider removing the config package and the dependency.
-- **`cmd/app` vs `cmd/payroll`.** Decide which entry point to keep, and make sure the kept one is both built and tested.
-- **`cmd/payroll/main_test.go`.** These tests only check for panics and determinism, not output values. Add tests that compare output against known-good results from the original program.
+- **`internal/payroll/payroll.go`:** Check calculations, rounding, and numeric formatting against the original COBOL. Pay particular attention to fixed-point `PIC` fields, which do not map directly to Go types. Use inputs beyond the single verified scenario.
+- **`internal/payroll/payroll_test.go`:** Confirm the tests cover the original's record layouts, edge cases, and the total line.
+- **Error path:** Confirm that downstream consumers do not parse stderr text. The wording of file errors changed (see Migration notes).
+- **`internal/config/config.go`:** Decide whether to wire this package in or remove it. It currently has no effect on the batch job.
+- **`go.mod`:** It declares `github.com/spf13/viper`. Confirm this dependency is actually imported; remove it if not.
+- **`cmd/app` vs `cmd/payroll`:** Pick one entry point to keep and remove the duplicate.
